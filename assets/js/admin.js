@@ -76,13 +76,15 @@
   .adm-dialog h2 { margin: 0; font-size: 1.4rem; font-weight: 900; color: #13293d; }
   .adm-dialog p { margin: 0; color: #566574; font-size: .92rem; }
   .adm-dialog label { display: flex; flex-direction: column; gap: 6px; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #13293d; }
-  .adm-dialog input { font: inherit; font-size: 1rem; text-transform: none; letter-spacing: 0; font-weight: 400; padding: 11px 12px; border: 1.5px solid #d5dde4; border-radius: 4px; color: #231f20; }
+  .adm-dialog input { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; font-size: 1rem; text-transform: none; letter-spacing: 0; font-weight: 400; padding: 11px 12px; border: 1.5px solid #d5dde4; border-radius: 4px; color: #231f20; }
   .adm-dialog input:focus { outline: none; border-color: #1b98e0; box-shadow: 0 0 0 3px rgba(27,152,224,.25); }
   .adm-dialog .adm-row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
   .adm-dialog .adm-err { color: #b3261e; font-size: .9rem; min-height: 1.2em; }
   .adm-dialog ol { margin: 0; padding-left: 20px; color: #566574; font-size: .88rem; display: flex; flex-direction: column; gap: 4px; }
   .adm-dialog hr { border: 0; border-top: 1px solid #d5dde4; margin: 6px 0; width: 100%; }
-  .adm-dialog .adm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .adm-dialog .adm-two { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+  .adm-dialog { overflow-x: hidden; }
+  @media (max-width: 480px) { .adm-dialog .adm-two { grid-template-columns: minmax(0,1fr); } }
   .adm-btn { font: inherit; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; cursor: pointer;
     padding: 10px 14px; border-radius: 4px; border: 1.5px solid #13293d; background: #13293d; color: #fff; }
   .adm-btn:hover { background: #1b98e0; border-color: #1b98e0; }
@@ -177,10 +179,14 @@
 
   // ---------- settings ----------
   function cfg() {
-    var guess = location.hostname.endsWith('.github.io') ? location.hostname : '';
+    // On github.io the address tells us the account and repo:
+    //   user.github.io/            -> repo "user.github.io"
+    //   user.github.io/portfolio/  -> repo "portfolio"
+    var onPages = location.hostname.endsWith('.github.io');
+    var seg = ROOT.pathname.split('/').filter(Boolean)[0];
     return {
-      owner: lsGet('adm-owner') || (guess ? guess.split('.')[0] : ''),
-      repo: lsGet('adm-repo') || guess,
+      owner: onPages ? location.hostname.split('.')[0] : (lsGet('adm-owner') || ''),
+      repo: onPages ? (seg || location.hostname) : (lsGet('adm-repo') || ''),
       branch: lsGet('adm-branch') || 'main',
       token: lsGet('adm-token') || ''
     };
@@ -207,6 +213,11 @@
   function openSettings(msg, then) {
     var c = cfg();
     ['owner', 'repo', 'branch', 'token'].forEach(function (k) { settings.querySelector('#adm-' + k).value = c[k]; });
+    var locked = location.hostname.endsWith('.github.io');
+    ['owner', 'repo'].forEach(function (k) {
+      var i = settings.querySelector('#adm-' + k); i.readOnly = locked; i.style.background = locked ? '#eef4f9' : '';
+      i.title = locked ? 'Filled in from this site’s address' : '';
+    });
     settings.querySelector('#adm-newpass').value = '';
     settings.querySelector('#adm-set-err').textContent = '';
     settings.querySelector('#adm-set-msg').textContent = msg || 'Saving writes your changes to your GitHub repository. These details are kept in this browser only.';
@@ -220,10 +231,20 @@
     if (!v.owner || !v.repo || !v.token) { settings.querySelector('#adm-set-err').textContent = 'Fill in your GitHub username, repository and access token.'; return; }
     lsSet('adm-owner', v.owner); lsSet('adm-repo', v.repo); lsSet('adm-branch', v.branch || 'main'); lsSet('adm-token', v.token);
     var np = settings.querySelector('#adm-newpass').value;
-    var next = Promise.resolve();
+    var errEl = settings.querySelector('#adm-set-err');
+    errEl.textContent = 'Checking with GitHub…';
+    var next = fetch('https://api.github.com/repos/' + encodeURIComponent(v.owner) + '/' + encodeURIComponent(v.repo) + '/branches/' + encodeURIComponent(v.branch || 'main'), {
+      cache: 'no-store', headers: { 'Authorization': 'Bearer ' + v.token, 'Accept': 'application/vnd.github+json' }
+    }).catch(function () { throw new Error('Couldn’t reach GitHub. Check your connection and try again.'); })
+      .then(function (r) {
+        if (r.ok) { errEl.textContent = ''; return; }
+        if (r.status === 401) throw new Error('GitHub didn’t accept that access token. Copy it again, or generate a new one.');
+        if (r.status === 404) throw new Error('GitHub can’t see “' + v.owner + '/' + v.repo + '” (branch “' + (v.branch || 'main') + '”) with this token. Either the repository name is wrong, or the token wasn’t given access to that repository under Repository access.');
+        throw new Error('GitHub returned an error (' + r.status + '). Try again in a moment.');
+      });
     if (np) {
-      if (np.length < 8) { settings.querySelector('#adm-set-err').textContent = 'Use at least 8 characters for the new password.'; return; }
-      next = sha256(np).then(function (h) {
+      if (np.length < 8) { errEl.textContent = 'Use at least 8 characters for the new password.'; return; }
+      next = next.then(function () { return sha256(np); }).then(function (h) {
         return putFile(ADMIN_PATH, utf8ToB64(JSON.stringify({ passwordHash: h }, null, 2) + '\n'), 'Change admin password');
       }).then(function () { toast('Password changed. It takes effect in about a minute.'); });
     }
@@ -244,7 +265,7 @@
   function apiError(r) {
     if (r.status === 401) return new Error('GitHub didn’t accept the access token. Paste a new one in Settings.');
     if (r.status === 403) return new Error('The access token can’t write to this repository. Give it Contents: Read and write.');
-    if (r.status === 404) return new Error('GitHub couldn’t find that repository or branch. Check them in Settings.');
+    if (r.status === 404) return new Error('GitHub couldn’t find the repository “' + cfg().owner + '/' + cfg().repo + '” on branch “' + cfg().branch + '”. Check the repository name, and make sure your token was given access to that repository.');
     if (r.status === 409 || r.status === 422) return new Error('GitHub reported a conflict. Save again in a moment.');
     return new Error('GitHub returned an error (' + r.status + '). Try saving again.');
   }
