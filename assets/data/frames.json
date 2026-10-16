@@ -1,1 +1,10 @@
-{ "frames": {} }
+{
+  "frames": {
+    "assets/img/work/vehicle-wrap/hero.jpg": {
+      "x": 50,
+      "y": 50,
+      "z": 1.03,
+      "v": "mvb8r58f"
+    }
+  }
+}
