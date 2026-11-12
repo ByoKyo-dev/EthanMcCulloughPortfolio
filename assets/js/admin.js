@@ -65,6 +65,7 @@
   // ---------- styles for admin UI ----------
   var css = `
   .adm-bar[hidden], .adm-toast[hidden], .adm-fab[hidden] { display: none !important; }
+  .adm-bar { view-transition-name: adm-bar; } .adm-fab { view-transition-name: adm-fab; }
   .adm-fab { position: fixed; z-index: 90; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid #34536f; background: #13293d; color: #fff; cursor: pointer;
     display: grid; place-items: center; opacity: .55; box-shadow: 0 6px 20px rgba(0,0,0,.2); transition: opacity .2s, background .2s; }

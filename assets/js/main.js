@@ -79,3 +79,23 @@
 document.querySelectorAll('[data-year]').forEach(function (el) {
   el.textContent = new Date().getFullYear();
 });
+
+// Page-to-page fade for browsers without cross-document View Transitions (Firefox).
+(function () {
+  if ('CSSViewTransitionRule' in window) return;                       // Chrome / Edge / Safari animate natively
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var root = document.documentElement;
+  root.classList.add('fade-nav');
+  window.addEventListener('pageshow', function () { root.classList.remove('is-leaving'); });
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    var url = new URL(a.href, location.href);
+    if (url.origin !== location.origin) return;
+    if (url.pathname === location.pathname && url.search === location.search) return;  // same-page anchor
+    e.preventDefault();
+    root.classList.add('is-leaving');
+    setTimeout(function () { location.href = url.href; }, 200);
+  });
+})();

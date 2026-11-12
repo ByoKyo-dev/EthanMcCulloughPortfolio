@@ -360,3 +360,35 @@ p { margin: 0; }
 }
 .card:hover .card-media img { transform: scale(calc(var(--z, 1) * 1.035)); }
 .frame-box { border-radius: var(--radius); background: var(--mist); }
+
+/* ---------- Page transitions ----------
+   Chrome, Edge and Safari animate between pages natively (cross-document
+   View Transitions). Project card images and titles morph into the project
+   page's Cover Shot and title; everything else slides and fades.
+   Firefox gets a simple fade from main.js instead. */
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }
+
+.site-header { view-transition-name: topbar; }
+[style*="view-transition-name:cover-"] { view-transition-class: morph-media; }
+[style*="view-transition-name:title-"] { view-transition-class: morph-title; }
+.card-body h3, .project-head h1 { width: fit-content; }
+.project-head h1 { align-self: flex-start; }
+
+::view-transition-old(root) { animation: vt-page-out 260ms cubic-bezier(.4, 0, 1, 1) both; }
+::view-transition-new(root) { animation: vt-page-in 520ms cubic-bezier(.16, 1, .3, 1) 140ms both; }
+@keyframes vt-page-out { to { opacity: 0; transform: translateY(-18px); } }
+@keyframes vt-page-in { from { opacity: 0; transform: translateY(36px); } }
+
+::view-transition-group(*.morph-media),
+::view-transition-group(*.morph-title) { animation-duration: 620ms; animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+::view-transition-old(*.morph-media),
+::view-transition-new(*.morph-media) { height: 100%; width: 100%; object-fit: cover; }
+::view-transition-old(*.morph-title),
+::view-transition-new(*.morph-title) { height: 100%; width: auto; object-fit: contain; object-position: left center; }
+
+/* Firefox fallback (see main.js) */
+html.fade-nav body { animation: fade-nav-in 380ms cubic-bezier(.16, 1, .3, 1) backwards; }
+html.fade-nav.is-leaving body { opacity: 0; transform: translateY(-12px); transition: opacity 200ms ease-in, transform 200ms ease-in; }
+@keyframes fade-nav-in { from { opacity: 0; transform: translateY(20px); } }
+@media (prefers-reduced-motion: reduce) { html.fade-nav body { animation: none; } html.fade-nav.is-leaving body { transition: none; } }
